@@ -1,0 +1,35 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+# виртуальные окружения
+.venv/
+venv/
+ENV/
+env/
+# пакеты/сборки
+build/
+dist/
+*.egg-info/
+# тесты и покрытия
+.tox/
+.nox/
+.coverage*
+pytest_cache/
+.hypothesis/
+# статический анализ
+.mypy_cache/
+.pyre/
+# документация
+docs/_build/
+# Jupyter
+.ipynb_checkpoints
+# IDE/редактор
+.vscode/
+.idea/
+# системные файлы
+.DS_Store
+Thumbs.db
+# переменные окружения
+*.env
+.env.*
