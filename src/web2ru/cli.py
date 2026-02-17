@@ -17,7 +17,11 @@ from web2ru.env import load_env_chain
 from web2ru.pipeline.offline_process import run_offline_process
 from web2ru.pipeline.online_render import run_online_render
 
-app = typer.Typer(add_completion=False, help="Web2RU offline translation snapshot utility.")
+app = typer.Typer(
+    add_completion=False,
+    help="Web2RU offline translation snapshot utility.",
+    pretty_exceptions_show_locals=False,
+)
 
 
 def _repo_root() -> Path:
@@ -29,6 +33,16 @@ def _env_or(default: str, *keys: str) -> str:
         value = os.getenv(key)
         if value:
             return value
+    return default
+
+
+def _int_env_or(default: int, *keys: str) -> int:
+    for key in keys:
+        value = os.getenv(key)
+        if not value:
+            continue
+        with suppress(ValueError):
+            return int(value)
     return default
 
 
@@ -81,9 +95,9 @@ def run(
     serve: str = typer.Option(None, "--serve"),
     serve_port: int = typer.Option(0, "--serve-port"),
     surf_same_origin_only: str = typer.Option(
-        "on",
+        "off",
         "--surf-same-origin-only",
-        help="In surf mode, allow only same-origin navigation",
+        help="In surf mode, restrict navigation to same-origin links only",
     ),
     surf_max_pages: int = typer.Option(30, "--surf-max-pages"),
     log_level: str = typer.Option("info", "--log-level"),
@@ -143,6 +157,7 @@ def run(
         use_asset_cache=not no_asset_cache,
         use_translation_cache=not no_translation_cache,
         max_asset_mb=max_asset_mb,
+        openai_min_interval_ms=_int_env_or(2500, "WEB2RU_OPENAI_RATE_LIMIT_MS"),
         asset_scan=_bool_from_on_off(asset_scan),
         fetch_missing_assets=_bool_from_on_off(fetch_missing_assets),
         freeze_js=freeze_js,

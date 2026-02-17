@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import mimetypes
 import webbrowser
 from contextlib import suppress
@@ -53,14 +54,8 @@ class SurfRequestHandler(BaseHTTPRequestHandler):
             return
         try:
             page = self.server.session.ensure_page_for_navigation(target_url)
-        except ValueError as exc:
-            self._send_html(400, "Bad request", str(exc))
-            return
-        except RuntimeError as exc:
-            self._send_html(429, "Limit reached", str(exc))
-            return
         except Exception as exc:
-            self._send_html(500, "Translation error", str(exc))
+            self._send_navigation_error(target_url=target_url, error=exc)
             return
         fragment = page.fragment if page.fragment else None
         self._redirect(build_page_route(page.page_key, fragment=fragment))
@@ -116,16 +111,31 @@ class SurfRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _send_html(self, status: int, title: str, body: str) -> None:
+    def _send_navigation_error(self, *, target_url: str, error: Exception) -> None:
+        status, title, body = _navigation_error_details(error=error)
+        source_link = ""
+        parsed = urlsplit(target_url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            escaped_url = html.escape(target_url, quote=True)
+            source_link = (
+                "<p><a href='"
+                + escaped_url
+                + "' target='_blank' rel='noopener noreferrer'>Open original page</a></p>"
+            )
+        self._send_html(status, title, body, extra_html=source_link)
+
+    def _send_html(self, status: int, title: str, body: str, *, extra_html: str = "") -> None:
         html = (
             "<html><head><meta charset='utf-8'><title>"
-            + title
+            + html_escape(title)
             + "</title></head><body><h1>"
-            + title
+            + html_escape(title)
             + "</h1><p>"
-            + body
+            + html_escape(body)
             + "</p></body></html>"
         )
+        if extra_html:
+            html = html.replace("</body></html>", extra_html + "</body></html>")
         data = html.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -154,3 +164,40 @@ def serve_surf_session(*, session: SurfSession, port: int, open_in_browser: bool
 def _extract_server_port(httpd: ThreadingHTTPServer) -> int:
     address = cast(tuple[str, int], httpd.server_address)
     return int(address[1])
+
+
+def _navigation_error_details(*, error: Exception) -> tuple[int, str, str]:
+    message = str(error).strip()
+    lowered = message.lower()
+    if isinstance(error, ValueError):
+        if "unsupported url scheme" in lowered:
+            return (
+                400,
+                "Unsupported Link",
+                "This link cannot be translated. Only http/https URLs are supported.",
+            )
+        if "cross-origin navigation is disabled" in lowered:
+            return (
+                400,
+                "External Link Blocked",
+                "Cross-origin navigation is disabled. Restart with --surf-same-origin-only off.",
+            )
+        return 400, "Bad Link", message or "The target link is invalid."
+    if isinstance(error, RuntimeError):
+        if message.startswith("surf max pages reached:"):
+            return (
+                429,
+                "Page Limit Reached",
+                "Session page limit reached. Increase --surf-max-pages and retry.",
+            )
+        if "access interstitial detected" in lowered or "anti-bot challenge" in lowered:
+            return (
+                502,
+                "Source Access Blocked",
+                "The target site returned an anti-bot challenge. Translation is unavailable right now.",
+            )
+    return 500, "Translation Error", message or "Failed to translate the target page."
+
+
+def html_escape(value: str) -> str:
+    return html.escape(value, quote=False)

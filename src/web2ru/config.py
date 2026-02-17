@@ -11,7 +11,7 @@ class RunConfig:
     url: str
     fast: bool = False
     mode: str = "single"  # single|surf
-    surf_same_origin_only: bool = True
+    surf_same_origin_only: bool = False
     surf_max_pages: int = 30
     model: str = "gpt-5.1"
     reasoning_effort: str = "medium"
@@ -36,6 +36,7 @@ class RunConfig:
     use_asset_cache: bool = True
     use_translation_cache: bool = True
     max_asset_mb: int = 15
+    openai_min_interval_ms: int = 2500
     asset_scan: bool = True
     fetch_missing_assets: bool = True
     freeze_js: str = "auto"  # auto|on|off

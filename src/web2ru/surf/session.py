@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 from web2ru.assets.cache import AssetCache
 from web2ru.config import RunConfig
+from web2ru.pipeline.interstitial import looks_like_access_interstitial
 from web2ru.pipeline.offline_process import run_offline_process
 from web2ru.pipeline.online_render import run_online_render
 from web2ru.surf.manifest import ManifestPage, SurfManifest
@@ -40,7 +41,10 @@ class SurfSession:
         self.max_pages = max_pages
         self.origin_url = canonicalize_source_url(config_template.url)
 
-        self.session_root = config_template.output_root / _session_slug(self.origin_url)
+        self.session_root = config_template.output_root / _session_slug(
+            self.origin_url,
+            same_origin_only=self.same_origin_only,
+        )
         self.pages_root = self.session_root / "pages"
         self.pages_root.mkdir(parents=True, exist_ok=True)
         self.manifest = SurfManifest.load_or_create(
@@ -90,6 +94,16 @@ class SurfSession:
         index_path = output_dir / "index.html"
         if not index_path.exists():
             return None
+        if _index_contains_interstitial(index_path):
+            with self._lock:
+                current = self.manifest.get_by_page_key(page_key)
+                if current is not None and current.status == "ready":
+                    self.manifest.mark_failed(
+                        source_url=current.source_url,
+                        page_key=current.page_key,
+                        error="stale interstitial output detected; rebuilding required",
+                    )
+            return None
         return output_dir
 
     def get_source_url_by_page_key(self, page_key: str) -> str | None:
@@ -108,8 +122,14 @@ class SurfSession:
                 existing = self.manifest.get_by_url(canonical)
                 if existing is not None and existing.status == "ready" and existing.output_dir is not None:
                     output_dir = self.session_root / existing.output_dir
-                    if (output_dir / "index.html").exists():
+                    index_path = output_dir / "index.html"
+                    if index_path.exists() and not _index_contains_interstitial(index_path):
                         return existing
+                    self.manifest.mark_failed(
+                        source_url=existing.source_url,
+                        page_key=existing.page_key,
+                        error="stale interstitial output detected; rebuilding required",
+                    )
 
                 inflight = self._inflight.get(canonical)
                 if inflight is not None:
@@ -180,7 +200,16 @@ class SurfSession:
         return output_dir
 
 
-def _session_slug(origin_url: str) -> str:
+def _session_slug(origin_url: str, *, same_origin_only: bool) -> str:
     page_key = page_key_for_url(origin_url)
     host = origin_url.split("://", 1)[1].split("/", 1)[0]
-    return f"surf-{host}-{page_key[:8]}"
+    mode_suffix = "same" if same_origin_only else "any"
+    return f"surf-{host}-{page_key[:8]}-{mode_suffix}"
+
+
+def _index_contains_interstitial(index_path: Path) -> bool:
+    try:
+        html_text = index_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    return looks_like_access_interstitial(html_text)

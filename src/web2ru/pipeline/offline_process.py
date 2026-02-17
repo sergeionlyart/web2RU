@@ -288,6 +288,7 @@ def _run_params_for_report(config: RunConfig) -> dict[str, Any]:
         "max_items_per_batch": config.max_items_per_batch,
         "max_retries": config.max_retries,
         "max_asset_mb": config.max_asset_mb,
+        "openai_min_interval_ms": config.openai_min_interval_ms,
         "asset_scan": config.asset_scan,
         "fetch_missing_assets": config.fetch_missing_assets,
         "freeze_js": config.freeze_js,

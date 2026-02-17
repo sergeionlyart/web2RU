@@ -18,6 +18,18 @@ python -m playwright install chromium
 web2ru "https://example.com/page" --open
 ```
 
+## OpenAI-домен (устойчивость сессии)
+- Для `openai.com` автоматически используется persistent browser profile и reuse `storage_state`
+  в кеше (`~/Library/Caches/web2ru` на macOS).
+- Межзапросный интервал для `openai.com` настраивается через ENV:
+  `WEB2RU_OPENAI_RATE_LIMIT_MS` (по умолчанию `2500`).
+- Если страница отдает anti-bot interstitial, утилита завершится явной ошибкой (без ложного “перевода”).
+
+## Surf-режим (переход по ссылкам)
+- В `--mode surf` по умолчанию переписываются и same-origin, и cross-origin ссылки (`--surf-same-origin-only off`).
+- Если перевод целевой страницы невозможен, surf показывает понятную страницу ошибки с причиной и ссылкой на оригинал.
+- Чтобы ограничить переходы только текущим доменом, используйте `--surf-same-origin-only on`.
+
 ## Качество
 См.:
 - `AGENTS.md` — правила работы Codex и команды
