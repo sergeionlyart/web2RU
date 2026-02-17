@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-TOKEN_PROTECTOR_VERSION = "1.0"
+TOKEN_PROTECTOR_VERSION = "1.1"
 PLACEHOLDER_PREFIX = "WEB2RU_TP_"
 
 
@@ -14,15 +14,14 @@ _PROTECT_RE = re.compile(
             r"\bwww\.[^\s)>'\"`]+\b",
             r"\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b",
             r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
-            r"\b(?:sha|md5|commit)?[=:]?[0-9a-f]{7,64}\b",
+            r"\b(?:sha|md5|commit)?[=:]?[0-9a-fA-F]{7,64}\b",
             r"(?:^|\s)(?:--[a-zA-Z0-9][\w-]*|-[a-zA-Z])(?!\w)",
             r"\b\d+\.\d+\.\d+(?:[-+][\w.-]+)?\b",
             r"(?<!\w)(?:/[^\s]+|\./[^\s]+)(?!\w)",
             r"\b[A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]+\b",
             r"\b[a-z]+(?:[A-Z][a-z0-9]+){1,}[A-Za-z0-9]*\b",
         ]
-    ),
-    re.IGNORECASE,
+    )
 )
 
 _PLACEHOLDER_RE = re.compile(rf"{PLACEHOLDER_PREFIX}\d{{6}}")

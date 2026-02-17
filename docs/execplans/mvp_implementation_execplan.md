@@ -39,6 +39,12 @@ Out of scope (for this plan):
 
 ## Progress
 
+- [x] (2026-02-17 09:55Z) Investigate OpenAI control-page regression reported by user: mixed EN/RU output and missing images on offline snapshot.
+- [x] (2026-02-17 09:57Z) Implement Token Protector hotfix in code (`src/web2ru/translate/token_protector.py`): remove global case-insensitive matching and bump `TOKEN_PROTECTOR_VERSION` to `1.1` to avoid stale cache reuse.
+- [x] (2026-02-17 09:58Z) Add regression coverage in `tests/unit/test_token_protector.py` for plain prose (must not be protected) and technical-token protection (must still round-trip).
+- [x] (2026-02-17 10:00Z) Validate with quality gates (`ruff`, `mypy`, `pytest`) and live OpenAI rerun after fix:
+  - `output/openai.com-index-harness-engineering-293d0f96-6/report.json`
+  - `translated_parts=170`, `errors=[]`, `missing_img_total=0`, `offline_ok_default_mode=true`.
 - [x] (2026-02-16 22:23Z) Confirm canonical spec path and remove duplicate root `TECHNICAL_SPEC_WEB2RU.md`.
 - [x] (2026-02-16 22:23Z) Prepare MVP ExecPlan document and commit implementation sequence.
 - [x] (2026-02-16 23:50Z) Bootstrap Python package skeleton, `pyproject.toml`, and baseline CLI wiring.
@@ -52,6 +58,8 @@ Out of scope (for this plan):
 
 ## Surprises & Discoveries
 
+- Token Protector over-protected normal English prose because `_PROTECT_RE` used `re.IGNORECASE`, which made the camelCase branch match ordinary lowercase words; this produced large placeholder sets and mixed EN/RU output after restore.
+- OpenAI control-page image breakage in the reported run was amplified by `--fetch-missing-assets off`; with asset fetching enabled, page images were restored locally.
 - The repo currently contains architecture/spec/testing docs but no `src/` implementation yet, so MVP work starts from project scaffold.
 - The technical spec had markdown-rendered tag loss in several sections (`<script>`, `<noscript>`, `<base>`, inline tags); those sections were restored with backticks to prevent re-loss.
 - Local runtime in this workspace is Python `3.10.10`; project metadata was adjusted to `requires-python>=3.10` to keep local reproducible setup and quality gates green.
@@ -59,6 +67,14 @@ Out of scope (for this plan):
 - Live translation runs on larger pages can be slow; OpenAI client timeout was explicitly set to reduce indefinite waiting.
 
 ## Decision Log
+
+- Decision: remove global case-insensitive regex matching in Token Protector and explicitly keep uppercase hex support in the hash pattern.
+  Rationale: preserves protection for technical tokens while preventing accidental masking of natural-language words.
+  Date/Author: 2026-02-17 / user-approved, Codex implemented.
+
+- Decision: bump `TOKEN_PROTECTOR_VERSION` from `1.0` to `1.1`.
+  Rationale: force fresh translation-cache keys after placeholder behavior change and prevent stale mixed-language cache hits.
+  Date/Author: 2026-02-17 / Codex.
 
 - Decision: Keep `docs/TECHNICAL_SPEC_WEB2RU.md` as canonical source of truth and remove root duplicate.
   Rationale: single authoritative spec avoids drift and ambiguity.
@@ -84,6 +100,7 @@ Current outcome:
 - control-url smoke runs are partially complete; extractor and asset scan heuristics were adjusted based on live findings.
 - live translation artifacts were finalized for the remaining large control URLs (`edison`, `minimaxir`) and quality gates are still green.
 - OpenAI control URL remains sensitive to anti-bot interstitial responses, so acceptance for translation quality is based on content-serving control URLs where text extraction is available.
+- Token Protector hotfix is validated on OpenAI control page: no over-protection (`token_protected_count=0` for content run), full part translation (`translated_parts=170`), and no broken `<img>` assets in generated offline output.
 
 Retrospective placeholders (to update after delivery):
 - what shipped vs planned,
