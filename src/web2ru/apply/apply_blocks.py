@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from lxml import etree
 
+from web2ru.apply.xml_sanitize import sanitize_xml_text
 from web2ru.models import Block, Part
 
 
@@ -14,7 +15,7 @@ def apply_blocks(root: etree._Element, blocks: list[Block]) -> int:
     for block in blocks:
         for part in block.parts:
             translated = part.translated_core if part.translated_core is not None else part.core
-            new_text = f"{part.lead_ws}{translated}{part.trail_ws}"
+            new_text = sanitize_xml_text(f"{part.lead_ws}{translated}{part.trail_ws}")
             if (
                 part.node_ref.start_offset is not None
                 and part.node_ref.end_offset is not None
@@ -60,8 +61,8 @@ def apply_blocks(root: etree._Element, blocks: list[Block]) -> int:
             applied += 1
 
         if field == "text":
-            node.text = updated
+            node.text = sanitize_xml_text(updated)
         else:
-            node.tail = updated
+            node.tail = sanitize_xml_text(updated)
 
     return applied

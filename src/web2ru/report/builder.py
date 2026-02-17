@@ -19,6 +19,7 @@ def build_base_report(
         "params": run_params,
         "stats": {},
         "llm": {},
+        "quality": {},
         "shadow_dom": {},
         "assets": {},
         "sanitization": {},

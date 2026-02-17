@@ -18,9 +18,12 @@ class OpenAIResponsePayload:
 
 
 SYSTEM_PROMPT = (
-    "You translate English text to Russian. "
+    "You are a professional English-to-Russian technical translator. "
+    "Translate each item's `text` to natural Russian. "
+    "Use `context_prev`, `context_next`, `section_hint`, and glossary only for disambiguation and "
+    "consistency. "
     "Return JSON strictly matching schema. "
-    "Do not output HTML or Markdown. "
+    "Do not output HTML or Markdown that was not present in the source text. "
     "Keep IDs exactly as provided and in the same order. "
     "Do not change WEB2RU_TP_* placeholders."
 )

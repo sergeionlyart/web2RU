@@ -52,3 +52,5 @@ def test_offline_pipeline_writes_snapshot(tmp_path: Path) -> None:
     html_text = result.index_path.read_text(encoding="utf-8")
     assert "./assets/" in html_text
     assert "https://example.com/assets/app.css" not in html_text
+    assert "quality" in result.report
+    assert "context_coverage_ratio" in result.report["quality"]

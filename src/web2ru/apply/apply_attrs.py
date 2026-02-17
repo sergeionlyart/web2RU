@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from lxml import etree
 
+from web2ru.apply.xml_sanitize import sanitize_xml_text
 from web2ru.models import AttributeItem
 
 
@@ -17,6 +18,6 @@ def apply_attributes(root: etree._Element, attrs: list[AttributeItem]) -> int:
         node = nodes[0]
         if not isinstance(node, etree._Element):
             continue
-        node.set(item.node_ref.attr_name, value)
+        node.set(item.node_ref.attr_name, sanitize_xml_text(value))
         applied += 1
     return applied

@@ -77,3 +77,23 @@ def test_apply_blocks_replaces_code_comment_ranges_only() -> None:
     applied = apply_blocks(root, [block])
     assert applied == 2
     assert root.xpath("string(//code)") == "# инициализация\nx = 1\n# готово\n"
+
+
+def test_apply_blocks_strips_invalid_xml_control_chars() -> None:
+    root = html.fromstring("<html><body><p>Date</p></body></html>")
+    p = root.xpath("//p")[0]
+    xpath = root.getroottree().getpath(p)
+    part = Part(
+        id="t_000999",
+        raw="Date",
+        lead_ws="",
+        core="Date",
+        trail_ws="",
+        node_ref=NodeRef(xpath=xpath, field="text"),
+        block_id="b_000999",
+        translated_core="12 фев. 2026\x00a0г.",
+    )
+    block = Block(block_id="b_000999", context="date", parts=[part])
+    applied = apply_blocks(root, [block])
+    assert applied == 1
+    assert root.xpath("string(//p)") == "12 фев. 2026a0г."

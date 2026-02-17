@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,8 +13,43 @@ from web2ru.translate.client_openai import OpenAIClient
 from web2ru.translate.token_protector import TOKEN_PROTECTOR_VERSION, protect_text, restore_text
 from web2ru.translate.validate import ValidationOutcome, validate_translation_result
 
-PROMPT_VERSION = "1.0"
-GLOSSARY_VERSION = "1.0"
+PROMPT_VERSION = "1.1"
+GLOSSARY_VERSION = "1.1"
+_MAX_CONTEXT_CHARS = 220
+_MAX_GLOSSARY_TERMS = 40
+_GLOSSARY_TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9.+/#-]{2,}\b")
+_GLOSSARY_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "that",
+    "this",
+    "when",
+    "where",
+    "have",
+    "has",
+    "using",
+    "used",
+    "into",
+    "without",
+    "within",
+    "across",
+    "their",
+    "there",
+}
+_STATIC_GLOSSARY: dict[str, str] = {
+    "OpenAI": "OpenAI",
+    "Codex": "Codex",
+    "API": "API",
+    "JSON": "JSON",
+    "HTML": "HTML",
+    "CSS": "CSS",
+    "DOM": "DOM",
+    "CLI": "CLI",
+    "ExecPlan": "ExecPlan",
+}
 
 
 @dataclass(slots=True)
@@ -27,6 +63,11 @@ class TranslateStats:
     translated_parts: int = 0
     translated_attrs: int = 0
     token_protected_count: int = 0
+    batches_total: int = 0
+    batch_chars_total: int = 0
+    items_with_context: int = 0
+    context_chars_total: int = 0
+    glossary_terms: int = 0
 
     def __post_init__(self) -> None:
         if self.failures is None:
@@ -78,6 +119,7 @@ class Translator:
         attrs: list[AttributeItem],
     ) -> None:
         items: list[TranslationItem] = []
+        source_texts: list[str] = []
         protected_inputs: dict[str, str] = {}
         token_maps: dict[str, dict[str, str]] = {}
         id_to_part: dict[str, Part] = {}
@@ -89,6 +131,7 @@ class Translator:
                 part.protected_core = protected
                 part.token_map = mapping
                 self.stats.token_protected_count += len(mapping)
+                source_texts.append(part.core)
                 protected_inputs[part.id] = protected
                 token_maps[part.id] = mapping
                 id_to_part[part.id] = part
@@ -97,6 +140,8 @@ class Translator:
                         id=part.id,
                         text=protected,
                         block_id=part.block_id,
+                        source_text=part.core,
+                        section_hint=part.block_id,
                     )
                 )
 
@@ -105,6 +150,7 @@ class Translator:
             attr.protected_text = protected
             attr.token_map = mapping
             self.stats.token_protected_count += len(mapping)
+            source_texts.append(attr.text)
             protected_inputs[attr.id] = protected
             token_maps[attr.id] = mapping
             id_to_attr[attr.id] = attr
@@ -114,15 +160,21 @@ class Translator:
                     text=protected,
                     hint=attr.hint,
                     allow_empty=False,
+                    source_text=attr.text,
+                    section_hint=f"attr:{attr.id}",
                 )
             )
 
         if not items:
             return
 
+        self._attach_local_context(items)
+        document_glossary = self._build_document_glossary(source_texts)
+        self.stats.glossary_terms = len(document_glossary)
         translated = self._translate_items_recursive(
             items=items,
             protected_inputs=protected_inputs,
+            glossary=document_glossary,
             depth=0,
         )
 
@@ -146,6 +198,7 @@ class Translator:
         *,
         items: list[TranslationItem],
         protected_inputs: dict[str, str],
+        glossary: dict[str, str],
         depth: int,
     ) -> dict[str, str]:
         self.stats.split_depth_max = max(self.stats.split_depth_max, depth)
@@ -154,10 +207,14 @@ class Translator:
             items,
             max_chars=self._batch_chars,
             max_items=self._max_items_per_batch,
+            prefer_section_boundary=True,
         ):
+            self.stats.batches_total += 1
+            self.stats.batch_chars_total += batch.chars
             translated = self._translate_batch_with_retry(
                 batch_items=batch.items,
                 protected_inputs=protected_inputs,
+                glossary=glossary,
             )
             if translated is None:
                 if len(batch.items) <= 1:
@@ -172,11 +229,13 @@ class Translator:
                 left = self._translate_items_recursive(
                     items=batch.items[:mid],
                     protected_inputs=protected_inputs,
+                    glossary=glossary,
                     depth=depth + 1,
                 )
                 right = self._translate_items_recursive(
                     items=batch.items[mid:],
                     protected_inputs=protected_inputs,
+                    glossary=glossary,
                     depth=depth + 1,
                 )
                 result.update(left)
@@ -190,9 +249,10 @@ class Translator:
         *,
         batch_items: list[TranslationItem],
         protected_inputs: dict[str, str],
+        glossary: dict[str, str],
     ) -> dict[str, str] | None:
         expected_ids = [item.id for item in batch_items]
-        cache_key = self._make_cache_key(batch_items)
+        cache_key = self._make_cache_key(batch_items, glossary)
         if self._cache is not None:
             cached = self._cache.get(cache_key)
             if cached is not None:
@@ -206,11 +266,21 @@ class Translator:
                 "keep_placeholders": True,
                 "no_html": True,
                 "allow_empty_parts": self._allow_empty_parts,
+                "use_neighbor_context": True,
+                "keep_style_consistent": True,
             },
             "items": [
-                {"id": item.id, "text": item.text, "hint": item.hint or ""} for item in batch_items
+                {
+                    "id": item.id,
+                    "text": item.text,
+                    "hint": item.hint or "",
+                    "context_prev": item.context_prev,
+                    "context_next": item.context_next,
+                    "section_hint": item.section_hint,
+                }
+                for item in batch_items
             ],
-            "glossary": {"OpenAI": "OpenAI", "Codex": "Codex"},
+            "glossary": glossary,
         }
 
         last_error = ""
@@ -248,13 +318,25 @@ class Translator:
         )
         return None
 
-    def _make_cache_key(self, items: list[TranslationItem]) -> str:
+    def _make_cache_key(self, items: list[TranslationItem], glossary: dict[str, str]) -> str:
         payload = json.dumps(
-            [{"id": item.id, "text": item.text, "hint": item.hint} for item in items],
+            [
+                {
+                    "id": item.id,
+                    "text": item.text,
+                    "hint": item.hint,
+                    "context_prev": item.context_prev,
+                    "context_next": item.context_next,
+                    "section_hint": item.section_hint,
+                }
+                for item in items
+            ],
             ensure_ascii=False,
             sort_keys=True,
         )
         payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        glossary_payload = json.dumps(glossary, ensure_ascii=False, sort_keys=True)
+        glossary_hash = hashlib.sha256(glossary_payload.encode("utf-8")).hexdigest()
         raw = "|".join(
             [
                 self._model,
@@ -263,6 +345,66 @@ class Translator:
                 GLOSSARY_VERSION,
                 TOKEN_PROTECTOR_VERSION,
                 payload_hash,
+                glossary_hash,
             ]
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _attach_local_context(self, items: list[TranslationItem]) -> None:
+        sections: dict[str, list[int]] = {}
+        for idx, item in enumerate(items):
+            key = item.section_hint or item.block_id or ""
+            if not key:
+                continue
+            sections.setdefault(key, []).append(idx)
+
+        for indices in sections.values():
+            for pos, item_idx in enumerate(indices):
+                item = items[item_idx]
+                prev_text = ""
+                if pos > 0:
+                    previous = items[indices[pos - 1]]
+                    prev_text = previous.source_text or ""
+                next_text = ""
+                if pos + 1 < len(indices):
+                    following = items[indices[pos + 1]]
+                    next_text = following.source_text or ""
+                item.context_prev = self._normalize_context(prev_text)
+                item.context_next = self._normalize_context(next_text)
+                if item.context_prev or item.context_next:
+                    self.stats.items_with_context += 1
+                    self.stats.context_chars_total += len(item.context_prev) + len(
+                        item.context_next
+                    )
+
+    def _build_document_glossary(self, source_texts: list[str]) -> dict[str, str]:
+        glossary = dict(_STATIC_GLOSSARY)
+        counts: dict[str, int] = {}
+        for text in source_texts:
+            for match in _GLOSSARY_TOKEN_RE.finditer(text):
+                token = match.group(0)
+                if len(token) > 40:
+                    continue
+                lowered = token.lower()
+                if lowered in _GLOSSARY_STOPWORDS:
+                    continue
+                if token.islower() and "-" not in token and not any(ch.isdigit() for ch in token):
+                    continue
+                counts[token] = counts.get(token, 0) + 1
+
+        for token, count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0])):
+            if count < 2:
+                continue
+            if token in glossary:
+                continue
+            glossary[token] = token
+            if len(glossary) >= _MAX_GLOSSARY_TERMS:
+                break
+        return glossary
+
+    def _normalize_context(self, text: str) -> str:
+        compact = " ".join(text.split())
+        if len(compact) <= _MAX_CONTEXT_CHARS:
+            return compact
+        clipped = compact[: _MAX_CONTEXT_CHARS - 3].rstrip()
+        return f"{clipped}..."

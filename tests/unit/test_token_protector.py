@@ -35,19 +35,14 @@ def test_placeholders_find() -> None:
 
 
 def test_token_protector_does_not_mask_plain_prose() -> None:
-    src = (
-        "Agents are most effective in environments with strict boundaries and predictable structure."
-    )
+    src = "Agents are most effective in environments with strict boundaries and predictable structure."
     protected = protect_text(src)
     assert protected.text == src
     assert protected.mapping == {}
 
 
 def test_token_protector_still_masks_technical_tokens() -> None:
-    src = (
-        "Use parseHttpResponse in ./src/main.py with --flag and user_name; "
-        "commit=ABCDEF1234567"
-    )
+    src = "Use parseHttpResponse in ./src/main.py with --flag and user_name; commit=ABCDEF1234567"
     protected = protect_text(src)
     restored = restore_text(protected.text, protected.mapping)
 

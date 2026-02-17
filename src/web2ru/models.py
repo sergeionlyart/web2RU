@@ -83,6 +83,10 @@ class TranslationItem:
     block_id: str | None = None
     hint: str | None = None
     allow_empty: bool = True
+    source_text: str | None = None
+    context_prev: str = ""
+    context_next: str = ""
+    section_hint: str = ""
 
 
 @dataclass(slots=True)

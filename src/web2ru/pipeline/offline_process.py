@@ -125,6 +125,8 @@ def run_offline_process(
         ),
         "token_protected_count": translator_stats.get("token_protected_count", 0),
     }
+    batches_total = translator_stats.get("batches_total", 0)
+    batch_chars_total = translator_stats.get("batch_chars_total", 0)
     report["llm"] = {
         "model": config.model,
         "reasoning_effort": config.reasoning_effort,
@@ -132,6 +134,24 @@ def run_offline_process(
         "retries": translator_stats.get("retries", 0),
         "auto_split_depth": translator_stats.get("split_depth_max", 0),
         "cache_hits": translator_stats.get("cache_hits", 0),
+        "batches_total": batches_total,
+        "avg_batch_chars": (
+            round(batch_chars_total / batches_total, 2) if batches_total > 0 else 0.0
+        ),
+        "glossary_terms": translator_stats.get("glossary_terms", 0),
+    }
+    total_items = report["stats"]["parts_total"] + report["stats"]["attrs_total"]
+    items_with_context = translator_stats.get("items_with_context", 0)
+    context_chars_total = translator_stats.get("context_chars_total", 0)
+    report["quality"] = {
+        "items_with_context": items_with_context,
+        "context_coverage_ratio": (
+            round(items_with_context / total_items, 4) if total_items > 0 else 0.0
+        ),
+        "avg_context_chars": (
+            round(context_chars_total / items_with_context, 2) if items_with_context > 0 else 0.0
+        ),
+        "glossary_terms": translator_stats.get("glossary_terms", 0),
     }
     report["shadow_dom"] = {
         "enabled": online.shadow_dom.enabled,

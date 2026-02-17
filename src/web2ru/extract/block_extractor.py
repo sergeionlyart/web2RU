@@ -105,10 +105,9 @@ def _iter_text_slots(
     def walk(current: etree._Element) -> None:
         if _is_excluded(current, excluded_ids):
             return
-        if (
-            should_skip_element(current, allow_code_blocks=allow_code_blocks)
-            and not is_template_shadow_root(current)
-        ):
+        if should_skip_element(
+            current, allow_code_blocks=allow_code_blocks
+        ) and not is_template_shadow_root(current):
             return
         if current.text:
             slots.append((current, "text", current.text))
@@ -142,7 +141,9 @@ def _pre_language_hint(pre_node: etree._Element) -> str | None:
     return None
 
 
-def _is_prose_pre_block(pre_node: etree._Element, slots: list[tuple[etree._Element, str, str]]) -> bool:
+def _is_prose_pre_block(
+    pre_node: etree._Element, slots: list[tuple[etree._Element, str, str]]
+) -> bool:
     lang = _pre_language_hint(pre_node)
     if lang in PROSE_PRE_LANGS:
         return True
