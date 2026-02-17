@@ -19,6 +19,7 @@ from web2ru.config import RunConfig
 from web2ru.env import load_env_chain
 from web2ru.pipeline.offline_process import run_offline_process
 from web2ru.pipeline.online_render import run_online_render
+from web2ru.pipeline.persistent_context import launch_persistent_context_with_lock_recovery
 from web2ru.pipeline.session_policy import (
     build_session_policy,
     load_storage_state,
@@ -259,10 +260,15 @@ def _capture_auth_session(cfg: RunConfig) -> None:
     typer.echo("2) Return to terminal and press Enter to save session.")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(policy.profile_dir),
+        context = launch_persistent_context_with_lock_recovery(
+            playwright=p,
+            profile_dir=policy.profile_dir,
             headless=False,
-            args=["--disable-blink-features=AutomationControlled"],
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-session-crashed-bubble",
+                "--no-first-run",
+            ],
         )
         try:
             _restore_auth_cookies(context=context, policy_url=cfg.url, cache_dir=cfg.cache_dir)

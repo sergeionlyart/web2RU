@@ -11,6 +11,7 @@ from web2ru.assets.cache import AssetCache
 from web2ru.config import RunConfig
 from web2ru.models import OnlineRenderResult, ShadowDomStats
 from web2ru.pipeline.interstitial import looks_like_access_interstitial
+from web2ru.pipeline.persistent_context import launch_persistent_context_with_lock_recovery
 from web2ru.pipeline.session_policy import (
     SessionPolicy,
     build_session_policy,
@@ -20,9 +21,7 @@ from web2ru.pipeline.session_policy import (
     resolve_storage_state_input,
 )
 
-_INTERSTITIAL_ERROR = (
-    "Access interstitial detected during online render; target content is blocked by anti-bot challenge."
-)
+_INTERSTITIAL_ERROR = "Access interstitial detected during online render; target content is blocked by anti-bot challenge."
 _MEDIUM_AUTH_PREFIX = "Medium authentication required."
 
 
@@ -121,10 +120,15 @@ def _new_persistent_context(
         raise RuntimeError("persistent profile is not configured")
 
     policy.profile_dir.mkdir(parents=True, exist_ok=True)
-    return playwright.chromium.launch_persistent_context(
-        str(policy.profile_dir),
+    return launch_persistent_context_with_lock_recovery(
+        playwright=playwright,
+        profile_dir=policy.profile_dir,
         headless=not config.headful,
-        args=["--disable-blink-features=AutomationControlled"],
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-session-crashed-bubble",
+            "--no-first-run",
+        ],
     )
 
 
@@ -279,7 +283,7 @@ def _maybe_raise_medium_auth_required(*, final_url: str, html_text: str) -> None
     markers = (
         'href="https://medium.com/m/signin"',
         'href="https://medium.com/m/signin?',
-        "action=\"/m/signin\"",
+        'action="/m/signin"',
         "log in to medium",
         "sign in with google",
         "become a member",
