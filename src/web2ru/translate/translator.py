@@ -18,6 +18,7 @@ GLOSSARY_VERSION = "1.1"
 _MAX_CONTEXT_CHARS = 220
 _MAX_GLOSSARY_TERMS = 40
 _GLOSSARY_TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9.+/#-]{2,}\b")
+_SENTENCE_END_RE = re.compile(r"[.!?…](?:[\"')\\]]+)?\s*$")
 _GLOSSARY_STOPWORDS = {
     "the",
     "and",
@@ -361,6 +362,11 @@ class Translator:
         for indices in sections.values():
             for pos, item_idx in enumerate(indices):
                 item = items[item_idx]
+                source_text = item.source_text or item.text
+                if not self._should_include_neighbor_context(source_text):
+                    item.context_prev = ""
+                    item.context_next = ""
+                    continue
                 prev_text = ""
                 if pos > 0:
                     previous = items[indices[pos - 1]]
@@ -376,6 +382,21 @@ class Translator:
                     self.stats.context_chars_total += len(item.context_prev) + len(
                         item.context_next
                     )
+
+    def _should_include_neighbor_context(self, text: str) -> bool:
+        compact = " ".join(text.split())
+        if not compact:
+            return False
+        words = compact.split(" ")
+        # Short fragments and headings are most sensitive to local context.
+        if len(compact) <= 80 or len(words) <= 12:
+            return True
+        # For long text with a clear sentence ending, local context adds little quality but
+        # significantly increases payload size.
+        if _SENTENCE_END_RE.search(compact):
+            return False
+        # Mid-sentence fragments often start lowercase and benefit from neighboring context.
+        return compact[0].islower()
 
     def _build_document_glossary(self, source_texts: list[str]) -> dict[str, str]:
         glossary = dict(_STATIC_GLOSSARY)

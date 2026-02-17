@@ -32,10 +32,11 @@ def build_batches(
             next_key = _section_key(item)
             current_key = _section_key(current[-1])
             if next_key and current_key and next_key != current_key:
-                # Keep nearby context together unless current batch is tiny.
-                flush_for_section = char_count >= max(400, max_chars // 3) or len(current) >= max(
-                    6, max_items // 3
-                )
+                # Keep section boundaries, but only once the batch is already substantial.
+                # This reduces many tiny requests on pages with frequent short section changes.
+                flush_for_section = char_count >= max(1200, int(max_chars * 0.75)) or len(
+                    current
+                ) >= max(20, int(max_items * 0.75))
         if flush_for_size or flush_for_section:
             batches.append(TranslateBatch(items=current, chars=char_count))
             current = []

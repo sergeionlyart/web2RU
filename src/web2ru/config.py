@@ -9,6 +9,7 @@ from platformdirs import user_cache_dir
 @dataclass(slots=True)
 class RunConfig:
     url: str
+    fast: bool = False
     model: str = "gpt-5.1"
     reasoning_effort: str = "medium"
     max_output_tokens: int = 8192

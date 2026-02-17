@@ -55,6 +55,11 @@ Out of scope:
 - [x] (2026-02-17 10:11Z) Run quality gates (`ruff`, `mypy`, `pytest`) in local `venv`.
 - [x] (2026-02-17 10:43Z) Add XML-safety sanitization for translated text/attrs (`\\x00` and invalid control chars) after live-run crash on `simonwillison.net`; add unit coverage.
 - [x] (2026-02-17 10:43Z) Run authorized live validation on all 5 control URLs and capture fresh artifacts.
+- [x] (2026-02-17 12:31Z) Implement P1 speed optimizations:
+  - less aggressive section-boundary splitting in translation batching,
+  - selective neighbor-context injection only for short/fragmented text,
+  - concurrent `fetch_missing_assets` with shared client reuse.
+- [x] (2026-02-17 12:31Z) Run before/after runtime benchmark on all 5 control URLs with identical CLI profile (`reasoning-effort=none`, `max-retries=3`).
 
 ## Surprises & Discoveries
 
@@ -68,6 +73,8 @@ Out of scope:
   Evidence: `ruff format docs/execplans/translation_quality_execplan.md` returns "Markdown formatting is experimental".
 - Live run on `simonwillison.net` crashed during apply because translated text occasionally contained XML-invalid control bytes (e.g., `\\x00`), which `lxml` rejects.
   Evidence: `ValueError: All strings must be XML compatible` in offline apply stage; fixed by sanitizing translated text/attrs before setting node content.
+- Wall-clock before/after comparisons can be heavily skewed by translation-cache state.
+  Evidence: baseline run had high cache-hit ratios on several pages (`cache_hits` ~= `batches_total`), while post-change run used cold keys after batching/context changes and therefore made many live LLM calls.
 
 ## Decision Log
 
@@ -91,6 +98,10 @@ Out of scope:
   Rationale: prevents runtime crashes from rare control characters produced by model output while preserving pipeline invariants.
   Date/Author: 2026-02-17 / Codex.
 
+- Decision: keep context-quality improvements but reduce context payload size via heuristics and reduce batch fragmentation by section.
+  Rationale: target lower LLM request count and lower payload overhead while keeping cohesion gains.
+  Date/Author: 2026-02-17 / Codex.
+
 ## Outcomes & Retrospective
 
 Target outcome:
@@ -101,7 +112,8 @@ Target outcome:
 Current status:
 - context-aware translation payload, section-aware batching, glossary bootstrap, quality stats, and tests are implemented.
 - live validation completed on all control URLs with fresh output artifacts.
-- remaining work: baseline-vs-new qualitative scoring package and optional harmonization second pass.
+- P1 speed optimization code implemented and benchmarked; uncached-request counts reduced on large control pages.
+- remaining work: isolate and report cache-normalized speed benchmark, baseline-vs-new qualitative scoring package, and optional harmonization second pass.
 
 Retrospective (fill after delivery):
 - what improved most (cohesion vs terminology vs style),

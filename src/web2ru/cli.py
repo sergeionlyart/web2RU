@@ -9,6 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import typer
+from click.core import ParameterSource
 
 from web2ru.assets.cache import AssetCache
 from web2ru.config import RunConfig
@@ -35,9 +36,16 @@ def _bool_from_on_off(value: str) -> bool:
     return value.lower() == "on"
 
 
+def _is_default_param_source(ctx: typer.Context, name: str) -> bool:
+    source = ctx.get_parameter_source(name)
+    return source in {ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP}
+
+
 @app.command()
 def run(
+    ctx: typer.Context,
     url: str = typer.Argument(..., help="Source page URL"),
+    fast: bool = typer.Option(False, "--fast", help="Use speed-oriented preset values"),
     open_result: bool = typer.Option(False, "--open", help="Open result in browser"),
     headful: bool = typer.Option(False, "--headful", help="Run Playwright in visible mode"),
     timeout_ms: int = typer.Option(60000, "--timeout-ms"),
@@ -75,10 +83,26 @@ def run(
 ) -> None:
     repo_root = _repo_root()
     load_env_chain(repo_root)
+    if fast:
+        if _is_default_param_source(ctx, "reasoning_effort"):
+            reasoning_effort = "none"
+        if _is_default_param_source(ctx, "max_retries"):
+            max_retries = 3
+        if _is_default_param_source(ctx, "batch_chars"):
+            batch_chars = 8000
+        if _is_default_param_source(ctx, "max_items_per_batch"):
+            max_items_per_batch = 100
+        if _is_default_param_source(ctx, "post_load_wait_ms"):
+            post_load_wait_ms = 700
+        if _is_default_param_source(ctx, "max_scroll_steps"):
+            max_scroll_steps = 12
+        if _is_default_param_source(ctx, "max_scroll_ms"):
+            max_scroll_ms = 10000
 
     serve_resolved = _resolve_serve_flag(open_result=open_result, serve=serve)
     cfg = RunConfig(
         url=url,
+        fast=fast,
         model=model or _env_or("gpt-5.1", "WEB2RU_MODEL"),
         reasoning_effort=reasoning_effort or _env_or("medium", "WEB2RU_REASONING_EFFORT"),
         max_output_tokens=max_output_tokens,

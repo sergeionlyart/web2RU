@@ -225,6 +225,7 @@ def _update_css_records(asset_cache: AssetCache, rewritten_css: dict[str, str]) 
 
 def _run_params_for_report(config: RunConfig) -> dict[str, Any]:
     return {
+        "fast": config.fast,
         "model": config.model,
         "reasoning_effort": config.reasoning_effort,
         "timeout_ms": config.timeout_ms,
