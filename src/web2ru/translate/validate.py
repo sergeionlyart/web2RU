@@ -9,7 +9,9 @@ from jsonschema import ValidationError, validate
 from web2ru.translate.schema import TRANSLATIONS_SCHEMA
 from web2ru.translate.token_protector import validate_placeholder_integrity
 
-_HTML_MD_RE = re.compile(r"(<[^>]+>|```|^\s*#{1,6}\s)", re.MULTILINE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_MD_FENCE_RE = re.compile(r"```")
+_MD_HEADING_RE = re.compile(r"^\s*#{1,6}\s", re.MULTILINE)
 
 
 @dataclass(slots=True)
@@ -56,16 +58,21 @@ def validate_translation_result(
         return ValidationOutcome(ok=False, error="id_order_error")
 
     for item_id, translated in translated_map.items():
-        if _HTML_MD_RE.search(translated):
+        source = protected_inputs[item_id]
+        if _HTML_TAG_RE.search(translated) and not _HTML_TAG_RE.search(source):
+            return ValidationOutcome(ok=False, error="html_markdown_detected")
+        if _MD_FENCE_RE.search(translated) and not _MD_FENCE_RE.search(source):
+            return ValidationOutcome(ok=False, error="html_markdown_detected")
+        if _MD_HEADING_RE.search(translated) and not _MD_HEADING_RE.search(source):
             return ValidationOutcome(ok=False, error="html_markdown_detected")
         ok, err = validate_placeholder_integrity(
-            source_protected_text=protected_inputs[item_id],
+            source_protected_text=source,
             translated_text=translated,
             strict=strict_placeholders,
         )
         if not ok:
             return ValidationOutcome(ok=False, error=f"token_integrity:{err}")
-        if not allow_empty_parts and protected_inputs[item_id].strip() and not translated.strip():
+        if not allow_empty_parts and source.strip() and not translated.strip():
             return ValidationOutcome(ok=False, error="empty_part_disallowed")
 
     return ValidationOutcome(ok=True, translations=translated_map)

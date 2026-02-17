@@ -25,13 +25,14 @@ def is_template_shadow_root(element: etree._Element) -> bool:
     )
 
 
-def should_skip_element(element: etree._Element) -> bool:
+def should_skip_element(element: etree._Element, *, allow_code_blocks: bool = False) -> bool:
     if not isinstance(element.tag, str):
         return True
     tag = element.tag.lower()
     if tag == "template" and is_template_shadow_root(element):
         return False
-    if tag in HARD_SKIP_TAGS or tag == "template":
+    hard_skip = HARD_SKIP_TAGS if not allow_code_blocks else (HARD_SKIP_TAGS - {"code", "pre"})
+    if tag in hard_skip or tag == "template":
         return True
 
     if (element.get("aria-hidden") or "").strip().lower() == "true":

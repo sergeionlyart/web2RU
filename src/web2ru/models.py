@@ -40,6 +40,8 @@ class NodeRef:
     xpath: str
     field: str  # text|tail|attr
     attr_name: str | None = None
+    start_offset: int | None = None
+    end_offset: int | None = None
 
 
 @dataclass(slots=True)

@@ -39,6 +39,17 @@ Out of scope (for this plan):
 
 ## Progress
 
+- [x] (2026-02-17 10:43Z) Extend extraction/apply pipeline for in-article `pre/code` blocks:
+  - prose-like `pre/code` content (e.g., markdown snippets) is now translated as normal text;
+  - code-like `pre/code` content is translated comment-only via offset-based replacement, preserving executable code tokens and structure.
+- [x] (2026-02-17 10:43Z) Relax markdown heading/fence validation to block only injected markup not present in source text, so legitimate markdown snippets can pass strict response validation.
+- [x] (2026-02-17 10:44Z) Add regression tests:
+  - `tests/unit/test_extract_blocks.py` (markdown `pre`, `data-language=md`, comment-only code extraction),
+  - `tests/unit/test_apply_blocks.py` (offset-based in-place comment replacement),
+  - `tests/unit/test_translate_validate.py` (allow heading when source contains it, reject injected heading otherwise).
+- [x] (2026-02-17 10:45Z) Validate live on target page:
+  - `output/developers.openai.com-cookbook-articles-codex_exec_plans-507523ef-2/report.json`,
+  - problematic snippet now translated: “При разработке сложных функциональностей ... от этапа проектирования до этапа реализации.”
 - [x] (2026-02-17 09:55Z) Investigate OpenAI control-page regression reported by user: mixed EN/RU output and missing images on offline snapshot.
 - [x] (2026-02-17 09:57Z) Implement Token Protector hotfix in code (`src/web2ru/translate/token_protector.py`): remove global case-insensitive matching and bump `TOKEN_PROTECTOR_VERSION` to `1.1` to avoid stale cache reuse.
 - [x] (2026-02-17 09:58Z) Add regression coverage in `tests/unit/test_token_protector.py` for plain prose (must not be protected) and technical-token protection (must still round-trip).
@@ -58,6 +69,8 @@ Out of scope (for this plan):
 
 ## Surprises & Discoveries
 
+- Shiki-highlighted markdown blocks on `developers.openai.com` use `data-language="md"` plus nested span tokens, so language detection cannot rely only on `language-*` CSS classes.
+- A strict “reject any markdown heading” validator blocked legitimate translations for markdown snippets that intentionally start with `#`; validation must distinguish injected markup from source-preserved markup.
 - Token Protector over-protected normal English prose because `_PROTECT_RE` used `re.IGNORECASE`, which made the camelCase branch match ordinary lowercase words; this produced large placeholder sets and mixed EN/RU output after restore.
 - OpenAI control-page image breakage in the reported run was amplified by `--fetch-missing-assets off`; with asset fetching enabled, page images were restored locally.
 - The repo currently contains architecture/spec/testing docs but no `src/` implementation yet, so MVP work starts from project scaffold.
@@ -67,6 +80,14 @@ Out of scope (for this plan):
 - Live translation runs on larger pages can be slow; OpenAI client timeout was explicitly set to reduce indefinite waiting.
 
 ## Decision Log
+
+- Decision: treat `pre/code` blocks with markdown/text language hints as prose and translate fully; treat code-language blocks as comment-only translation with positional text replacement.
+  Rationale: satisfies user requirement to translate narrative blocks inside articles while preserving executable code.
+  Date/Author: 2026-02-17 / user-requested, Codex implemented.
+
+- Decision: markdown heading/fence checks are now source-aware (reject only when markup appears in translation but not in source).
+  Rationale: preserves LLM safety guardrails while allowing valid markdown snippet translation.
+  Date/Author: 2026-02-17 / Codex.
 
 - Decision: remove global case-insensitive regex matching in Token Protector and explicitly keep uppercase hex support in the hash pattern.
   Rationale: preserves protection for technical tokens while preventing accidental masking of natural-language words.
@@ -101,6 +122,7 @@ Current outcome:
 - live translation artifacts were finalized for the remaining large control URLs (`edison`, `minimaxir`) and quality gates are still green.
 - OpenAI control URL remains sensitive to anti-bot interstitial responses, so acceptance for translation quality is based on content-serving control URLs where text extraction is available.
 - Token Protector hotfix is validated on OpenAI control page: no over-protection (`token_protected_count=0` for content run), full part translation (`translated_parts=170`), and no broken `<img>` assets in generated offline output.
+- In-article markdown snippets now translate correctly on the target Cookbook page, and code examples keep code intact while allowing comment-only translation via offset-aware apply logic.
 
 Retrospective placeholders (to update after delivery):
 - what shipped vs planned,
