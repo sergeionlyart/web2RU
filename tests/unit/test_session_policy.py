@@ -20,6 +20,7 @@ def test_build_session_policy_for_openai_domain(tmp_path: Path) -> None:
     )
 
     assert policy.host == "openai.com"
+    assert policy.auth_provider is None
     assert policy.use_persistent_profile is True
     assert policy.profile_dir == tmp_path / "browser_profiles" / "openai.com"
     assert policy.storage_state_path == tmp_path / "storage_state" / "openai.com.json"
@@ -34,9 +35,25 @@ def test_build_session_policy_for_non_openai_domain(tmp_path: Path) -> None:
     )
 
     assert policy.host is None
+    assert policy.auth_provider is None
     assert policy.use_persistent_profile is False
     assert policy.profile_dir is None
     assert policy.storage_state_path is None
+    assert policy.min_interval_ms == 0
+
+
+def test_build_session_policy_for_medium_domain(tmp_path: Path) -> None:
+    policy = build_session_policy(
+        url="https://medium.com/some-article",
+        cache_dir=tmp_path,
+        openai_min_interval_ms=2500,
+    )
+
+    assert policy.host == "medium.com"
+    assert policy.auth_provider == "medium"
+    assert policy.use_persistent_profile is True
+    assert policy.profile_dir == tmp_path / "browser_profiles" / "medium.com"
+    assert policy.storage_state_path == tmp_path / "storage_state" / "medium.com.json"
     assert policy.min_interval_ms == 0
 
 

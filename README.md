@@ -25,6 +25,12 @@ web2ru "https://example.com/page" --open
   `WEB2RU_OPENAI_RATE_LIMIT_MS` (по умолчанию `2500`).
 - Если страница отдает anti-bot interstitial, утилита завершится явной ошибкой (без ложного “перевода”).
 
+## Medium авторизация (для surf и single)
+- Для `medium.com` также используется persistent профиль и сохранение `storage_state`.
+- Если Medium требует логин, запустите:
+  `web2ru 'https://medium.com/' --auth-capture on --headful`
+- После входа в аккаунт нажмите Enter в терминале: сессия сохранится и будет переиспользоваться в следующих запусках.
+
 ## Surf-режим (переход по ссылкам)
 - В `--mode surf` по умолчанию переписываются и same-origin, и cross-origin ссылки (`--surf-same-origin-only off`).
 - Если перевод целевой страницы невозможен, surf показывает понятную страницу ошибки с причиной и ссылкой на оригинал.

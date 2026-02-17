@@ -14,6 +14,7 @@ _RATE_LIMIT_LOCK = threading.Lock()
 @dataclass(frozen=True, slots=True)
 class SessionPolicy:
     host: str | None
+    auth_provider: str | None
     use_persistent_profile: bool
     profile_dir: Path | None
     storage_state_path: Path | None
@@ -23,20 +24,26 @@ class SessionPolicy:
 def build_session_policy(*, url: str, cache_dir: Path, openai_min_interval_ms: int) -> SessionPolicy:
     host = (urlparse(url).hostname or "").strip().lower()
     if not host.endswith("openai.com"):
+        if host.endswith("medium.com"):
+            return _persistent_policy(
+                host=host,
+                auth_provider="medium",
+                cache_dir=cache_dir,
+                min_interval_ms=0,
+            )
         return SessionPolicy(
             host=None,
+            auth_provider=None,
             use_persistent_profile=False,
             profile_dir=None,
             storage_state_path=None,
             min_interval_ms=0,
         )
 
-    safe_host = host.replace(":", "_")
-    return SessionPolicy(
+    return _persistent_policy(
         host=host,
-        use_persistent_profile=True,
-        profile_dir=cache_dir / "browser_profiles" / safe_host,
-        storage_state_path=cache_dir / "storage_state" / f"{safe_host}.json",
+        auth_provider=None,
+        cache_dir=cache_dir,
         min_interval_ms=max(openai_min_interval_ms, 0),
     )
 
@@ -109,3 +116,17 @@ def _read_last_timestamp(path: Path) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     return 0.0
+
+
+def _persistent_policy(
+    *, host: str, auth_provider: str | None, cache_dir: Path, min_interval_ms: int
+) -> SessionPolicy:
+    safe_host = host.replace(":", "_")
+    return SessionPolicy(
+        host=host,
+        auth_provider=auth_provider,
+        use_persistent_profile=True,
+        profile_dir=cache_dir / "browser_profiles" / safe_host,
+        storage_state_path=cache_dir / "storage_state" / f"{safe_host}.json",
+        min_interval_ms=max(min_interval_ms, 0),
+    )

@@ -2,20 +2,28 @@ from __future__ import annotations
 
 import os
 import socketserver
+import sys
 import webbrowser
 from contextlib import suppress
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any, cast
 
 import typer
 from click.core import ParameterSource
+from playwright.sync_api import BrowserContext, sync_playwright
 
 from web2ru.assets.cache import AssetCache
 from web2ru.config import RunConfig
 from web2ru.env import load_env_chain
 from web2ru.pipeline.offline_process import run_offline_process
 from web2ru.pipeline.online_render import run_online_render
+from web2ru.pipeline.session_policy import (
+    build_session_policy,
+    load_storage_state,
+    persist_storage_state,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -63,6 +71,11 @@ def run(
     fast: bool = typer.Option(False, "--fast", help="Use speed-oriented preset values"),
     open_result: bool = typer.Option(False, "--open", help="Open result in browser"),
     headful: bool = typer.Option(False, "--headful", help="Run Playwright in visible mode"),
+    auth_capture: str = typer.Option(
+        "off",
+        "--auth-capture",
+        help="Open browser, complete login manually, save auth session, and exit",
+    ),
     timeout_ms: int = typer.Option(60000, "--timeout-ms"),
     post_load_wait_ms: int = typer.Option(1500, "--post-load-wait-ms"),
     auto_scroll: str = typer.Option("on", "--auto-scroll"),
@@ -172,6 +185,10 @@ def run(
         api_key=os.getenv("OPENAI_API_KEY"),
     )
 
+    if _bool_from_on_off(auth_capture):
+        _capture_auth_session(cfg)
+        return
+
     if cfg.mode == "surf":
         _run_surf_mode(cfg)
         return
@@ -217,6 +234,64 @@ def _resolve_serve_flag(*, open_result: bool, serve: str | None) -> bool:
     if serve is None:
         return open_result
     return _bool_from_on_off(serve)
+
+
+def _capture_auth_session(cfg: RunConfig) -> None:
+    policy = build_session_policy(
+        url=cfg.url,
+        cache_dir=cfg.cache_dir,
+        openai_min_interval_ms=cfg.openai_min_interval_ms,
+    )
+    if policy.auth_provider != "medium":
+        raise typer.BadParameter(
+            "Auth capture is currently supported for Medium links only. Use a medium.com URL."
+        )
+    if policy.profile_dir is None:
+        raise RuntimeError("Auth session profile path is not configured.")
+    if policy.storage_state_path is None:
+        raise RuntimeError("Auth storage state path is not configured.")
+    if not sys.stdin.isatty():
+        raise RuntimeError("Auth capture requires interactive terminal input.")
+
+    policy.profile_dir.mkdir(parents=True, exist_ok=True)
+    typer.echo("Web2RU: auth capture mode (Medium).")
+    typer.echo("1) Complete login in opened browser.")
+    typer.echo("2) Return to terminal and press Enter to save session.")
+
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            str(policy.profile_dir),
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        try:
+            _restore_auth_cookies(context=context, policy_url=cfg.url, cache_dir=cfg.cache_dir)
+            page = context.new_page()
+            page.goto(cfg.url, wait_until="domcontentloaded", timeout=cfg.timeout_ms)
+            input()
+            persist_storage_state(policy, context.storage_state())
+        finally:
+            context.close()
+
+    typer.echo(f"Saved auth session: {policy.storage_state_path}")
+
+
+def _restore_auth_cookies(*, context: BrowserContext, policy_url: str, cache_dir: Path) -> None:
+    policy = build_session_policy(
+        url=policy_url,
+        cache_dir=cache_dir,
+        openai_min_interval_ms=0,
+    )
+    payload = load_storage_state(policy)
+    if payload is None:
+        return
+    cookies = payload.get("cookies")
+    if not isinstance(cookies, list) or not cookies:
+        return
+    try:
+        context.add_cookies(cast(Any, cookies))
+    except Exception:
+        return
 
 
 def _serve_and_open(output_dir: Path, port: int) -> None:

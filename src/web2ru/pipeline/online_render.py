@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from typing import Any, cast
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
@@ -23,6 +23,7 @@ from web2ru.pipeline.session_policy import (
 _INTERSTITIAL_ERROR = (
     "Access interstitial detected during online render; target content is blocked by anti-bot challenge."
 )
+_MEDIUM_AUTH_PREFIX = "Medium authentication required."
 
 
 def run_online_render(config: RunConfig, asset_cache: AssetCache) -> tuple[OnlineRenderResult, str]:
@@ -197,6 +198,7 @@ def _render_with_context(
 
     html_dump = page.content()
     final_url = page.url
+    _maybe_raise_medium_auth_required(final_url=final_url, html_text=html_dump)
     user_agent = page.evaluate("() => navigator.userAgent")
     result = OnlineRenderResult(
         final_url=final_url,
@@ -262,6 +264,38 @@ def _capture_response_asset(response: object, asset_cache: AssetCache, max_asset
     except Exception:
         # Best effort capture only.
         return
+
+
+def _maybe_raise_medium_auth_required(*, final_url: str, html_text: str) -> None:
+    if not _is_medium_host(final_url):
+        return
+
+    parsed = urlsplit(final_url)
+    path = (parsed.path or "").lower()
+    lowered = html_text.lower()
+    if path.startswith("/m/signin") or path.startswith("/m/signin/"):
+        raise RuntimeError(_build_medium_auth_error(final_url))
+
+    markers = (
+        'href="https://medium.com/m/signin"',
+        'href="https://medium.com/m/signin?',
+        "action=\"/m/signin\"",
+        "log in to medium",
+        "sign in with google",
+        "become a member",
+    )
+    if any(marker in lowered for marker in markers) and "<article" not in lowered:
+        raise RuntimeError(_build_medium_auth_error(final_url))
+
+
+def _is_medium_host(url: str) -> bool:
+    host = (urlsplit(url).hostname or "").strip().lower()
+    return host.endswith("medium.com")
+
+
+def _build_medium_auth_error(url: str) -> str:
+    command = f"web2ru '{url}' --auth-capture on --headful"
+    return f"{_MEDIUM_AUTH_PREFIX} Run this command and complete login: {command}"
 
 
 def _document_height(page: Page) -> int:

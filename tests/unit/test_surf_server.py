@@ -30,3 +30,15 @@ def test_navigation_error_details_for_interstitial_block() -> None:
     assert status == 502
     assert title == "Source Access Blocked"
     assert "anti-bot challenge" in body
+
+
+def test_navigation_error_details_for_medium_auth_required() -> None:
+    status, title, body = _navigation_error_details(
+        error=RuntimeError(
+            "Medium authentication required. Run this command and complete login: "
+            "web2ru 'https://medium.com/' --auth-capture on --headful"
+        )
+    )
+    assert status == 401
+    assert title == "Medium Login Required"
+    assert "--auth-capture on --headful" in body

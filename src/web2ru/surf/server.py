@@ -81,7 +81,7 @@ class SurfRequestHandler(BaseHTTPRequestHandler):
             try:
                 self.server.session.ensure_page_for_navigation(source_url)
             except Exception as exc:
-                self._send_html(500, "Translation error", str(exc))
+                self._send_navigation_error(target_url=source_url, error=exc)
                 return
             page_dir = self.server.session.get_page_output_dir(page_key)
             if page_dir is None:
@@ -189,6 +189,12 @@ def _navigation_error_details(*, error: Exception) -> tuple[int, str, str]:
                 429,
                 "Page Limit Reached",
                 "Session page limit reached. Increase --surf-max-pages and retry.",
+            )
+        if "medium authentication required" in lowered:
+            return (
+                401,
+                "Medium Login Required",
+                message,
             )
         if "access interstitial detected" in lowered or "anti-bot challenge" in lowered:
             return (
