@@ -17,9 +17,12 @@ dist/
 .coverage*
 pytest_cache/
 .hypothesis/
+.ruff_cache/
 # статический анализ
 .mypy_cache/
 .pyre/
+# runtime outputs
+output/
 # документация
 docs/_build/
 # Jupyter

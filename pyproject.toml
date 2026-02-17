@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "web2ru"
+version = "0.1.0"
+description = "CLI utility for offline Russian snapshots of web pages"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Web2RU" }]
+dependencies = [
+  "click>=8.1.8,<8.2",
+  "cssselect>=1.2.0",
+  "httpx>=0.27.2",
+  "jsonschema>=4.23.0",
+  "lxml>=5.3.0",
+  "openai>=1.63.0",
+  "platformdirs>=4.3.6",
+  "playwright>=1.49.0",
+  "python-dotenv>=1.0.1",
+  "tinycss2>=1.4.0",
+  "typer==0.12.5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.12.0",
+  "pytest>=8.3.5",
+  "ruff>=0.12.9",
+]
+
+[project.scripts]
+web2ru = "web2ru.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/web2ru"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["output", "venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+disallow_untyped_defs = true
+exclude = ["^venv/"]
+
+[[tool.mypy.overrides]]
+module = ["lxml", "lxml.*", "tinycss2", "jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

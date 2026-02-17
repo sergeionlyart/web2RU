@@ -1,0 +1,5 @@
+https://openai.com/index/harness-engineering/
+https://simonwillison.net/
+https://edisonscientific.gitbook.io/edison-cookbook/paperqa
+https://matt.might.net/articles/peer-fortress/
+https://minimaxir.com/2025/11/nano-banana-prompts/
