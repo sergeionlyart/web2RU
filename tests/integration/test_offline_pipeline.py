@@ -11,6 +11,8 @@ from web2ru.pipeline.offline_process import run_offline_process
 def test_offline_pipeline_writes_snapshot(tmp_path: Path) -> None:
     html_dump = """
     <html><head>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta name="author" content="Simon Willison">
       <link rel="stylesheet" href="https://example.com/assets/app.css">
     </head>
     <body><main><p>Hello world</p></main></body></html>
@@ -52,5 +54,8 @@ def test_offline_pipeline_writes_snapshot(tmp_path: Path) -> None:
     html_text = result.index_path.read_text(encoding="utf-8")
     assert "./assets/" in html_text
     assert "https://example.com/assets/app.css" not in html_text
+    assert '<meta charset="utf-8">' in html_text
+    assert 'name="viewport" content="width=device-width,initial-scale=1"' in html_text
+    assert 'name="author" content="Simon Willison"' in html_text
     assert "quality" in result.report
     assert "context_coverage_ratio" in result.report["quality"]

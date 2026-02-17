@@ -45,6 +45,7 @@ def _is_default_param_source(ctx: typer.Context, name: str) -> bool:
 def run(
     ctx: typer.Context,
     url: str = typer.Argument(..., help="Source page URL"),
+    mode: str = typer.Option("single", "--mode", help="Run mode: single or surf"),
     fast: bool = typer.Option(False, "--fast", help="Use speed-oriented preset values"),
     open_result: bool = typer.Option(False, "--open", help="Open result in browser"),
     headful: bool = typer.Option(False, "--headful", help="Run Playwright in visible mode"),
@@ -79,10 +80,19 @@ def run(
     block_iframe: str = typer.Option("auto", "--block-iframe"),
     serve: str = typer.Option(None, "--serve"),
     serve_port: int = typer.Option(0, "--serve-port"),
+    surf_same_origin_only: str = typer.Option(
+        "on",
+        "--surf-same-origin-only",
+        help="In surf mode, allow only same-origin navigation",
+    ),
+    surf_max_pages: int = typer.Option(30, "--surf-max-pages"),
     log_level: str = typer.Option("info", "--log-level"),
 ) -> None:
     repo_root = _repo_root()
     load_env_chain(repo_root)
+    mode_resolved = mode.strip().lower()
+    if mode_resolved not in {"single", "surf"}:
+        raise typer.BadParameter("`--mode` must be either `single` or `surf`.")
     if fast:
         if _is_default_param_source(ctx, "reasoning_effort"):
             reasoning_effort = "none"
@@ -100,9 +110,14 @@ def run(
             max_scroll_ms = 10000
 
     serve_resolved = _resolve_serve_flag(open_result=open_result, serve=serve)
+    if mode_resolved == "surf":
+        serve_resolved = True
     cfg = RunConfig(
         url=url,
+        mode=mode_resolved,
         fast=fast,
+        surf_same_origin_only=_bool_from_on_off(surf_same_origin_only),
+        surf_max_pages=surf_max_pages,
         model=model or _env_or("gpt-5.1", "WEB2RU_MODEL"),
         reasoning_effort=reasoning_effort or _env_or("medium", "WEB2RU_REASONING_EFFORT"),
         max_output_tokens=max_output_tokens,
@@ -142,6 +157,10 @@ def run(
         api_key=os.getenv("OPENAI_API_KEY"),
     )
 
+    if cfg.mode == "surf":
+        _run_surf_mode(cfg)
+        return
+
     typer.echo("Web2RU: online render phase...")
     asset_cache = AssetCache()
     online, user_agent = run_online_render(cfg, asset_cache)
@@ -161,6 +180,22 @@ def run(
             _serve_and_open(offline.output_dir, cfg.serve_port)
         else:
             webbrowser.open(offline.index_path.resolve().as_uri())
+
+
+def _run_surf_mode(cfg: RunConfig) -> None:
+    from web2ru.surf.server import serve_surf_session
+    from web2ru.surf.session import SurfSession
+
+    typer.echo("Web2RU: surf mode initial page build...")
+    session = SurfSession(
+        config_template=cfg,
+        same_origin_only=cfg.surf_same_origin_only,
+        max_pages=cfg.surf_max_pages,
+    )
+    initial = session.ensure_page_for_navigation(cfg.url)
+    typer.echo(f"Surf session: {session.session_root}")
+    typer.echo(f"Initial page: {initial.source_url}")
+    serve_surf_session(session=session, port=cfg.serve_port, open_in_browser=cfg.open_result)
 
 
 def _resolve_serve_flag(*, open_result: bool, serve: str | None) -> bool:

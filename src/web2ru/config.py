@@ -10,6 +10,9 @@ from platformdirs import user_cache_dir
 class RunConfig:
     url: str
     fast: bool = False
+    mode: str = "single"  # single|surf
+    surf_same_origin_only: bool = True
+    surf_max_pages: int = 30
     model: str = "gpt-5.1"
     reasoning_effort: str = "medium"
     max_output_tokens: int = 8192

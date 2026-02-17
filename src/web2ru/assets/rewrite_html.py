@@ -11,6 +11,20 @@ from web2ru.assets.scan import normalize_url
 
 _SRCSET_SPLIT_RE = re.compile(r"\s*,\s*")
 _URL_FUNC_RE = re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.IGNORECASE)
+_META_URL_CONTENT_KEYS = {
+    "og:image",
+    "og:image:url",
+    "og:image:secure_url",
+    "og:video",
+    "og:video:url",
+    "og:video:secure_url",
+    "og:audio",
+    "og:audio:url",
+    "og:audio:secure_url",
+    "twitter:image",
+    "twitter:image:src",
+    "twitter:player",
+}
 
 
 def _rewrite_srcset(value: str, *, base_url: str, map_url: Callable[[str], str]) -> str:
@@ -41,11 +55,27 @@ def _rewrite_inline_style(value: str, *, base_url: str, map_url: Callable[[str],
     return _URL_FUNC_RE.sub(repl, value)
 
 
+def _should_rewrite_meta_content(element: html.HtmlElement, value: str) -> bool:
+    if element.tag.lower() != "meta":
+        return False
+    raw = value.strip()
+    if not raw:
+        return False
+
+    for key in ("property", "name", "itemprop"):
+        meta_key = (element.get(key) or "").strip().lower()
+        if meta_key in _META_URL_CONTENT_KEYS:
+            return True
+
+    return raw.startswith(("http://", "https://", "//"))
+
+
 def rewrite_html_urls(
     tree: html.HtmlElement,
     *,
     final_url: str,
     map_url: Callable[[str], str],
+    map_anchor_href: Callable[[str], str | None] | None = None,
     rewrite_style_blocks: bool = True,
 ) -> None:
     for element in tree.iterdescendants():
@@ -66,8 +96,18 @@ def rewrite_html_urls(
 
             if attr_name not in {"src", "href", "poster", "data", "xlink:href", "content"}:
                 continue
+            if attr_name == "content" and not _should_rewrite_meta_content(element, value):
+                continue
 
             if tag == "a" and attr_name == "href":
+                if value.strip().startswith("#"):
+                    continue
+                if map_anchor_href is None:
+                    continue
+                absolute_href = absolutize_href(final_url, value)
+                mapped_href = map_anchor_href(absolute_href)
+                if mapped_href:
+                    element.set(attr_name, mapped_href)
                 continue
             if tag == "script" and attr_name == "src":
                 continue

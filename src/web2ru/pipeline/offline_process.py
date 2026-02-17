@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
 
-from lxml import html
+from lxml import etree, html
 
 from web2ru.apply.apply_attrs import apply_attributes
 from web2ru.apply.apply_blocks import apply_blocks
@@ -27,6 +28,7 @@ def run_offline_process(
     online: OnlineRenderResult,
     asset_cache: AssetCache,
     user_agent: str,
+    map_anchor_href: Callable[[str], str | None] | None = None,
 ) -> OfflineResult:
     report = build_base_report(
         source_url=config.url,
@@ -39,6 +41,7 @@ def run_offline_process(
 
     root = parse_html(online.html_dump)
     _sanitize_base_url(root)
+    _ensure_utf8_charset(root)
 
     css_by_url = _extract_css_from_cache(asset_cache)
     needed_urls = (
@@ -97,7 +100,12 @@ def run_offline_process(
     def map_url(url: str) -> str:
         return asset_cache.ensure_local_mapping(url)
 
-    rewrite_html_urls(root, final_url=online.final_url, map_url=map_url)
+    rewrite_html_urls(
+        root,
+        final_url=online.final_url,
+        map_url=map_url,
+        map_anchor_href=map_anchor_href,
+    )
     rewritten_css = rewrite_css_asset_records(css_text_by_url=css_by_url, map_url=map_url)
     _update_css_records(asset_cache, rewritten_css)
 
@@ -200,6 +208,38 @@ def _sanitize_base_url(root: html.HtmlElement) -> None:
             parent.remove(base)
 
 
+def _ensure_utf8_charset(root: html.HtmlElement) -> None:
+    heads = root.xpath("//head")
+    if not heads:
+        return
+    head = heads[0]
+    if not isinstance(head, etree._Element):
+        return
+
+    charset_meta: etree._Element | None = None
+    for node in head.xpath("./meta[@charset]"):
+        if isinstance(node, etree._Element):
+            charset_meta = node
+            break
+
+    if charset_meta is None:
+        charset_meta = etree.Element("meta")
+        charset_meta.tail = "\n"
+        head.insert(0, charset_meta)
+    charset_meta.set("charset", "utf-8")
+
+    if head.index(charset_meta) != 0:
+        head.remove(charset_meta)
+        head.insert(0, charset_meta)
+
+    for node in head.xpath("./meta[@http-equiv]"):
+        if not isinstance(node, etree._Element):
+            continue
+        equiv = (node.get("http-equiv") or "").strip().lower()
+        if equiv == "content-type":
+            node.set("content", "text/html; charset=utf-8")
+
+
 def _extract_css_from_cache(asset_cache: AssetCache) -> dict[str, str]:
     out: dict[str, str] = {}
     for record in asset_cache.records.values():
@@ -226,6 +266,9 @@ def _update_css_records(asset_cache: AssetCache, rewritten_css: dict[str, str]) 
 def _run_params_for_report(config: RunConfig) -> dict[str, Any]:
     return {
         "fast": config.fast,
+        "mode": config.mode,
+        "surf_same_origin_only": config.surf_same_origin_only,
+        "surf_max_pages": config.surf_max_pages,
         "model": config.model,
         "reasoning_effort": config.reasoning_effort,
         "timeout_ms": config.timeout_ms,

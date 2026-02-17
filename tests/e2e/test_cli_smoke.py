@@ -175,3 +175,49 @@ def test_cli_fast_preset_respects_explicit_overrides(monkeypatch, tmp_path: Path
     assert cfg.batch_chars == 5000
     # Still preset for parameters not explicitly overridden.
     assert cfg.max_items_per_batch == 100
+
+
+def test_cli_surf_mode_invokes_surf_server(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    captured = {}
+
+    class FakeSession:
+        def __init__(self, *, config_template, same_origin_only, max_pages):  # type: ignore[no-untyped-def]
+            captured["config"] = config_template
+            captured["same_origin_only"] = same_origin_only
+            captured["max_pages"] = max_pages
+            self.session_root = tmp_path / "surf-session"
+            self.session_root.mkdir(parents=True, exist_ok=True)
+
+        def ensure_page_for_navigation(self, requested_url):  # type: ignore[no-untyped-def]
+            return type(
+                "PageResult",
+                (),
+                {"page_key": "abc123", "source_url": requested_url},
+            )()
+
+    def fake_serve_surf_session(*, session, port, open_in_browser):  # type: ignore[no-untyped-def]
+        captured["served"] = True
+        captured["port"] = port
+        captured["open_in_browser"] = open_in_browser
+        captured["session_root"] = session.session_root
+
+    monkeypatch.setattr("web2ru.surf.session.SurfSession", FakeSession)
+    monkeypatch.setattr("web2ru.surf.server.serve_surf_session", fake_serve_surf_session)
+
+    result = runner.invoke(
+        app,
+        [
+            "https://example.com/page",
+            "--mode",
+            "surf",
+            "--surf-same-origin-only",
+            "on",
+            "--surf-max-pages",
+            "15",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["served"] is True
+    assert captured["same_origin_only"] is True
+    assert captured["max_pages"] == 15
+    assert captured["config"].mode == "surf"
