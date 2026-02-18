@@ -188,7 +188,7 @@ Milestone 6: Validation and rollout
 ## Concrete Steps
 
 Working directory:
-- `cd /Users/sergejavdejcik/Library/Mobile Documents/com~apple~CloudDocs/2026_1_air/web2RU`
+- `cd /path/to/web2RU`
 
 Implementation sequence:
 1. Add baseline quality diagnostics and tests.

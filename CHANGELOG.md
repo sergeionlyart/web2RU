@@ -3,4 +3,4 @@
 Формат: Keep a Changelog + SemVer.
 
 ## [Unreleased]
-- TBD
+- OSS repo readiness: README (EN/RU), LICENSE, SECURITY, Code of Conduct, env template, CI.

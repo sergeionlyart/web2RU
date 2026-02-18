@@ -4,9 +4,7 @@ from web2ru.surf.server import _navigation_error_details
 
 
 def test_navigation_error_details_for_unsupported_scheme() -> None:
-    status, title, body = _navigation_error_details(
-        error=ValueError("unsupported URL scheme: ftp")
-    )
+    status, title, body = _navigation_error_details(error=ValueError("unsupported URL scheme: ftp"))
     assert status == 400
     assert title == "Unsupported Link"
     assert "http/https" in body

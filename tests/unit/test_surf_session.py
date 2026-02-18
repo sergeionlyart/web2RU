@@ -103,9 +103,7 @@ def test_surf_session_rejects_cross_origin_when_disabled(monkeypatch, tmp_path: 
         session.ensure_page_for_navigation("https://another.example.org/page")
 
 
-def test_surf_session_rebuilds_stale_interstitial_ready_page(
-    monkeypatch, tmp_path: Path
-) -> None:  # type: ignore[no-untyped-def]
+def test_surf_session_rebuilds_stale_interstitial_ready_page(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     calls = {"online": 0, "offline": 0}
 
     def fake_online(config, asset_cache):  # type: ignore[no-untyped-def]

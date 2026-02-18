@@ -21,7 +21,9 @@ class SessionPolicy:
     min_interval_ms: int
 
 
-def build_session_policy(*, url: str, cache_dir: Path, openai_min_interval_ms: int) -> SessionPolicy:
+def build_session_policy(
+    *, url: str, cache_dir: Path, openai_min_interval_ms: int
+) -> SessionPolicy:
     host = (urlparse(url).hostname or "").strip().lower()
     if not host.endswith("openai.com"):
         if host.endswith("medium.com"):

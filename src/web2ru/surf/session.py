@@ -120,7 +120,11 @@ class SurfSession:
             wait_event: threading.Event | None = None
             with self._lock:
                 existing = self.manifest.get_by_url(canonical)
-                if existing is not None and existing.status == "ready" and existing.output_dir is not None:
+                if (
+                    existing is not None
+                    and existing.status == "ready"
+                    and existing.output_dir is not None
+                ):
                     output_dir = self.session_root / existing.output_dir
                     index_path = output_dir / "index.html"
                     if index_path.exists() and not _index_contains_interstitial(index_path):

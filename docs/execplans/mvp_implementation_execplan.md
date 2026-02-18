@@ -204,7 +204,7 @@ Milestone 5: Report and validation
 ## Concrete Steps
 
 Working directory for all commands:
-- `cd /Users/sergejavdejcik/Library/Mobile Documents/com~apple~CloudDocs/2026_1_air/web2RU`
+- `cd /path/to/web2RU`
 
 1. Bootstrap package and test scaffolding.
    - create `src/web2ru/...` modules and `tests/unit`, `tests/integration`, `tests/e2e` skeletons.

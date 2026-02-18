@@ -49,9 +49,9 @@ def test_rewrite_html_urls_rewrites_anchor_links_with_mapper() -> None:
         root,
         final_url="https://example.com/page-one",
         map_url=lambda url: f"./assets/{url.rsplit('/', 1)[-1]}",
-        map_anchor_href=lambda href: f"/__web2ru__/go?url={href}"
-        if href.startswith("https://example.com/")
-        else None,
+        map_anchor_href=lambda href: (
+            f"/__web2ru__/go?url={href}" if href.startswith("https://example.com/") else None
+        ),
     )
 
     same_origin = root.xpath("//a[@id='same-origin']")[0]

@@ -15,6 +15,7 @@ dist/
 .tox/
 .nox/
 .coverage*
+.pytest_cache/
 pytest_cache/
 .hypothesis/
 .ruff_cache/
@@ -33,6 +34,9 @@ docs/_build/
 # системные файлы
 .DS_Store
 Thumbs.db
+# логи
+*.log
 # переменные окружения
 *.env
 .env.*
+!.env.example

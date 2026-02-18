@@ -33,4 +33,7 @@ def test_go_route_roundtrip_and_page_route_fragment() -> None:
     base, fragment = split_fragment(url)
     assert base == "https://example.com/docs/page"
     assert fragment == "chapter-2"
-    assert build_page_route("abc123", fragment=fragment) == "/__web2ru__/page/abc123/index.html#chapter-2"
+    assert (
+        build_page_route("abc123", fragment=fragment)
+        == "/__web2ru__/page/abc123/index.html#chapter-2"
+    )
