@@ -1,5 +1,7 @@
 # Web2RU
 
+[![CI](https://github.com/sergeionlyart/web2RU/actions/workflows/ci.yml/badge.svg)](https://github.com/sergeionlyart/web2RU/actions/workflows/ci.yml)
+
 ## What Is This
 
 Web2RU is a CLI tool that produces an **offline Russian snapshot** of a web page (EN -> RU) using the approach:
@@ -249,4 +251,3 @@ pytest -q
 ## Лицензия
 
 MIT, см. `LICENSE`.
-

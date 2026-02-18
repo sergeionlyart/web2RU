@@ -25,9 +25,15 @@ Examples of unacceptable behavior include:
 
 ## Enforcement
 
-Report unacceptable behavior by contacting the maintainer via GitHub (preferred):
-- If you have access to GitHub private contact methods, use them.
-- Otherwise, open an issue with minimal details and request a private follow-up channel.
+Report unacceptable behavior by contacting the maintainer.
+
+Preferred (GitHub):
+- Use GitHub private contact methods if available.
+- Otherwise, open an issue with the title: `CoC: request private channel` (do not include sensitive details).
+
+Fallback (social):
+- LinkedIn: https://www.linkedin.com/in/sergei-audzeichyk
+- Facebook: https://www.facebook.com/share/189r44tPUW/?mibextid=wwXIfr
 
 Project maintainers are responsible for clarifying standards and taking appropriate action.
 
@@ -35,4 +41,3 @@ Project maintainers are responsible for clarifying standards and taking appropri
 
 This Code of Conduct is adapted from the Contributor Covenant, version 2.1:
 https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
-
