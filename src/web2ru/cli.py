@@ -219,15 +219,13 @@ def _run_surf_mode(cfg: RunConfig) -> None:
     from web2ru.surf.server import serve_surf_session
     from web2ru.surf.session import SurfSession
 
-    typer.echo("Web2RU: surf mode initial page build...")
+    typer.echo("Web2RU: surf mode server starting...")
     session = SurfSession(
         config_template=cfg,
         same_origin_only=cfg.surf_same_origin_only,
         max_pages=cfg.surf_max_pages,
     )
-    initial = session.ensure_page_for_navigation(cfg.url)
     typer.echo(f"Surf session: {session.session_root}")
-    typer.echo(f"Initial page: {initial.source_url}")
     serve_surf_session(session=session, port=cfg.serve_port, open_in_browser=cfg.open_result)
 
 

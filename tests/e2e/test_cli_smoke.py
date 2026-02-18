@@ -188,13 +188,6 @@ def test_cli_surf_mode_invokes_surf_server(monkeypatch, tmp_path: Path) -> None:
             self.session_root = tmp_path / "surf-session"
             self.session_root.mkdir(parents=True, exist_ok=True)
 
-        def ensure_page_for_navigation(self, requested_url):  # type: ignore[no-untyped-def]
-            return type(
-                "PageResult",
-                (),
-                {"page_key": "abc123", "source_url": requested_url},
-            )()
-
     def fake_serve_surf_session(*, session, port, open_in_browser):  # type: ignore[no-untyped-def]
         captured["served"] = True
         captured["port"] = port

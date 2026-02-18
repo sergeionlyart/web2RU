@@ -43,7 +43,7 @@ class SurfRequestHandler(BaseHTTPRequestHandler):
         try:
             page = self.server.session.ensure_page_for_navigation(self.server.session.origin_url)
         except Exception as exc:
-            self._send_html(500, "Initialization error", str(exc))
+            self._send_navigation_error(target_url=self.server.session.origin_url, error=exc)
             return
         self._redirect(build_page_route(page.page_key))
 
