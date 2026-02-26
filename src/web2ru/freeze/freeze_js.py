@@ -19,8 +19,11 @@ def freeze_html(
         "iframes_blocked_count": 0,
         "csp_meta_removed_count": 0,
         "resource_hints_removed_count": 0,
+        "overlays_neutralized_count": 0,
+        "scroll_unlocks_count": 0,
     }
     if not freeze_js_enabled:
+        _neutralize_known_overlays(root, counters)
         return counters
 
     _disable_scripts(root, counters)
@@ -34,6 +37,7 @@ def freeze_html(
     _lazy_image_fix(root)
     _strip_integrity_and_cors(root, counters)
     _handle_noscript(root, mode=drop_noscript_mode)
+    _neutralize_known_overlays(root, counters)
     return counters
 
 
@@ -181,3 +185,90 @@ def _handle_noscript(root: etree._Element, mode: str) -> None:
             for child in list(ns):
                 parent.insert(parent.index(ns), deepcopy(child))
         parent.remove(ns)
+
+
+def _neutralize_known_overlays(root: etree._Element, counters: dict[str, int]) -> None:
+    if not _looks_like_linkedin_document(root):
+        return
+
+    overlay_xpaths = (
+        "//*[@id='base-contextual-sign-in-modal']",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' contextual-sign-in-modal ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' top-level-modal-container ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' modal__overlay ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' artdeco-global-alert ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' artdeco-global-alert-container ')]",
+    )
+
+    touched: set[int] = set()
+    for xpath in overlay_xpaths:
+        for node in root.xpath(xpath):
+            if not isinstance(node, etree._Element):
+                continue
+            marker = id(node)
+            if marker in touched:
+                continue
+            touched.add(marker)
+            _append_inline_style(
+                node,
+                "display:none !important; visibility:hidden !important; opacity:0 !important; pointer-events:none !important;",
+            )
+            node.set("aria-hidden", "true")
+            node.attrib.pop("inert", None)
+
+    if touched:
+        counters["overlays_neutralized_count"] += len(touched)
+
+    for node in root.xpath("//html|//body"):
+        if not isinstance(node, etree._Element):
+            continue
+        _append_inline_style(node, "overflow:auto !important; position:static !important;")
+        _strip_class_tokens(
+            node,
+            banned={
+                "artdeco-modal-open",
+                "modal-open",
+                "overflow-hidden",
+                "no-scroll",
+                "scroll-lock",
+            },
+        )
+        node.attrib.pop("inert", None)
+        counters["scroll_unlocks_count"] += 1
+
+
+def _looks_like_linkedin_document(root: etree._Element) -> bool:
+    og_linkedin = root.xpath(
+        "boolean(//meta[translate(@property, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')='og:site_name' "
+        "and contains(translate(@content, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'linkedin')])"
+    )
+    if bool(og_linkedin):
+        return True
+    host_signals = root.xpath(
+        "boolean(//*[@src and (contains(@src, 'linkedin.com') or contains(@src, 'licdn.com'))] "
+        "| //*[@href and contains(@href, 'linkedin.com')] "
+        "| //*[@data-impression-id and contains(translate(@data-impression-id, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+        "'abcdefghijklmnopqrstuvwxyz'), 'contextual-sign-in-modal')])"
+    )
+    return bool(host_signals)
+
+
+def _append_inline_style(node: etree._Element, extra: str) -> None:
+    current = (node.get("style") or "").strip()
+    if not current:
+        node.set("style", extra)
+        return
+    if not current.endswith(";"):
+        current = f"{current};"
+    node.set("style", f"{current} {extra}")
+
+
+def _strip_class_tokens(node: etree._Element, *, banned: set[str]) -> None:
+    raw = node.get("class")
+    if not raw:
+        return
+    kept = [token for token in raw.split() if token.lower() not in banned]
+    if kept:
+        node.set("class", " ".join(kept))
+    else:
+        node.attrib.pop("class", None)
