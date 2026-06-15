@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
@@ -38,7 +39,11 @@ def fetch_missing_assets(
     to_fetch: list[str] = []
 
     for url in sorted(needed_urls):
-        if asset_cache.has(url):
+        cached_record = asset_cache.get(url)
+        if cached_record is not None and not _is_invalid_next_image_payload(
+            url,
+            cached_record.content_type,
+        ):
             continue
         if not enabled:
             missing.append(MissingAsset(url=url, reason="disabled"))
@@ -88,15 +93,88 @@ def _fetch_one(client: httpx.Client, url: str) -> _FetchOutcome:
     try:
         response = client.get(url)
     except Exception as exc:  # noqa: BLE001 - keep pipeline resilient
+        fallback = _fetch_next_image_source(client, url)
+        if fallback is not None:
+            return fallback
         return _FetchOutcome(url=url, reason=f"error:{type(exc).__name__}")
 
     if response.status_code >= 400:
+        fallback = _fetch_next_image_source(client, url)
+        if fallback is not None:
+            return fallback
         return _FetchOutcome(url=url, reason=f"http_{response.status_code}")
+
+    content_type = response.headers.get("content-type")
+    if _is_invalid_next_image_payload(url, content_type):
+        fallback = _fetch_next_image_source(client, url)
+        if fallback is not None:
+            return fallback
+        return _FetchOutcome(url=url, reason="invalid_content_type")
 
     return _FetchOutcome(
         url=url,
         reason=None,
         final_url=str(response.url),
-        content_type=response.headers.get("content-type"),
+        content_type=content_type,
         data=response.content,
     )
+
+
+def _fetch_next_image_source(
+    client: httpx.Client,
+    original_url: str,
+) -> _FetchOutcome | None:
+    source_url = _next_image_source_url(original_url)
+    if source_url is None:
+        return None
+
+    try:
+        response = client.get(source_url)
+    except Exception:  # noqa: BLE001 - fallback failure must not stop the pipeline
+        return None
+
+    if response.status_code >= 400:
+        return None
+
+    content_type = response.headers.get("content-type")
+    if not _is_image_content_type(content_type):
+        return None
+
+    return _FetchOutcome(
+        url=original_url,
+        reason=None,
+        final_url=str(response.url),
+        content_type=content_type,
+        data=response.content,
+    )
+
+
+def _next_image_source_url(url: str) -> str | None:
+    parsed = urlparse(url)
+    if "/_next/image" not in parsed.path:
+        return None
+
+    source_values = parse_qs(parsed.query).get("url")
+    if not source_values or not source_values[0]:
+        return None
+
+    source_url = urljoin(url, source_values[0])
+    source_parsed = urlparse(source_url)
+    if source_parsed.scheme not in {"http", "https"} or not source_parsed.netloc:
+        return None
+    if source_url == url:
+        return None
+    return source_url
+
+
+def _is_invalid_next_image_payload(url: str, content_type: str | None) -> bool:
+    if _next_image_source_url(url) is None or content_type is None:
+        return False
+    return not _is_image_content_type(content_type)
+
+
+def _is_image_content_type(content_type: str | None) -> bool:
+    if content_type is None:
+        return False
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    return media_type.startswith("image/")
