@@ -188,18 +188,78 @@ def _handle_noscript(root: etree._Element, mode: str) -> None:
 
 
 def _neutralize_known_overlays(root: etree._Element, counters: dict[str, int]) -> None:
-    if not _looks_like_linkedin_document(root):
+    touched = _remove_funding_choices_overlays(root)
+    touched.update(_remove_sourcepoint_overlays(root))
+
+    overlay_xpaths: list[str] = []
+
+    if _looks_like_linkedin_document(root):
+        overlay_xpaths.extend(
+            [
+                "//*[@id='base-contextual-sign-in-modal']",
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' contextual-sign-in-modal ')]",
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' top-level-modal-container ')]",
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' modal__overlay ')]",
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' artdeco-global-alert ')]",
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' artdeco-global-alert-container ')]",
+            ]
+        )
+
+    touched.update(_hide_overlay_nodes(root, overlay_xpaths))
+
+    if not touched:
         return
 
-    overlay_xpaths = (
-        "//*[@id='base-contextual-sign-in-modal']",
-        "//*[contains(concat(' ', normalize-space(@class), ' '), ' contextual-sign-in-modal ')]",
-        "//*[contains(concat(' ', normalize-space(@class), ' '), ' top-level-modal-container ')]",
-        "//*[contains(concat(' ', normalize-space(@class), ' '), ' modal__overlay ')]",
-        "//*[contains(concat(' ', normalize-space(@class), ' '), ' artdeco-global-alert ')]",
-        "//*[contains(concat(' ', normalize-space(@class), ' '), ' artdeco-global-alert-container ')]",
-    )
+    counters["overlays_neutralized_count"] += len(touched)
+    _unlock_root_scroll(root, counters)
 
+
+def _remove_funding_choices_overlays(root: etree._Element) -> set[int]:
+    overlay_xpaths = (
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' fc-consent-root ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' fc-dialog-overlay ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' fc-dialog-container ')]",
+        "//*[contains(concat(' ', normalize-space(@class), ' '), ' fc-help-dialog-container ')]",
+    )
+    touched: set[int] = set()
+    for xpath in overlay_xpaths:
+        for node in list(root.xpath(xpath)):
+            if not isinstance(node, etree._Element):
+                continue
+            parent = node.getparent()
+            if parent is None:
+                continue
+            touched.add(id(node))
+            parent.remove(node)
+    return touched
+
+
+def _remove_sourcepoint_overlays(root: etree._Element) -> set[int]:
+    overlay_xpaths = (
+        "//*[starts-with(@id, 'sp_message_container_')]",
+        "//*[starts-with(@id, 'sp_message_iframe_')]",
+    )
+    touched: set[int] = set()
+    for xpath in overlay_xpaths:
+        for node in list(root.xpath(xpath)):
+            if not isinstance(node, etree._Element):
+                continue
+            parent = node.getparent()
+            if parent is None:
+                continue
+            touched.add(id(node))
+            parent.remove(node)
+
+    for node in root.xpath("//html|//body"):
+        if not isinstance(node, etree._Element):
+            continue
+        raw = node.get("class") or ""
+        if "sp-message-open" in {token.lower() for token in raw.split()}:
+            touched.add(id(node))
+    return touched
+
+
+def _hide_overlay_nodes(root: etree._Element, overlay_xpaths: list[str]) -> set[int]:
     touched: set[int] = set()
     for xpath in overlay_xpaths:
         for node in root.xpath(xpath):
@@ -215,14 +275,17 @@ def _neutralize_known_overlays(root: etree._Element, counters: dict[str, int]) -
             )
             node.set("aria-hidden", "true")
             node.attrib.pop("inert", None)
+    return touched
 
-    if touched:
-        counters["overlays_neutralized_count"] += len(touched)
 
+def _unlock_root_scroll(root: etree._Element, counters: dict[str, int]) -> None:
     for node in root.xpath("//html|//body"):
         if not isinstance(node, etree._Element):
             continue
-        _append_inline_style(node, "overflow:auto !important; position:static !important;")
+        _append_inline_style(
+            node,
+            "overflow:auto !important; position:static !important; height:auto !important; max-height:none !important;",
+        )
         _strip_class_tokens(
             node,
             banned={
@@ -231,6 +294,7 @@ def _neutralize_known_overlays(root: etree._Element, counters: dict[str, int]) -
                 "overflow-hidden",
                 "no-scroll",
                 "scroll-lock",
+                "sp-message-open",
             },
         )
         node.attrib.pop("inert", None)
